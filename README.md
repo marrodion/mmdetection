@@ -1,4 +1,15 @@
 
+# Fork changes
+
+- Added coco evaluation hook for single GPU training
+- Added dataset for IceVision competition
+
+TODO:
+
+- Early stopping hook
+- Tensorboard logger with train/test metrics and LR schedule
+- One cycle policy
+
 # MMDetection
 
 **News**: We released the technical report on [ArXiv](https://arxiv.org/abs/1906.07155).
