@@ -11,7 +11,8 @@ from mmcv.runner import (DistSamplerSeedHook, Runner, get_dist_info,
                          obj_from_dict)
 
 from mmdet import datasets
-from mmdet.core import (CocoDistEvalmAPHook, CocoDistEvalRecallHook,
+from mmdet.core import (CocoDistEvalmAPHook, CocoDistEvalRecallHook, 
+                        CocoLocalEvalmAPHook, CocoLocalEvalRecallHook,
                         DistEvalmAPHook, DistOptimizerHook, Fp16OptimizerHook)
 from mmdet.datasets import DATASETS, build_dataloader
 from mmdet.models import RPN
@@ -278,11 +279,6 @@ def _non_dist_train(model,
                     validate=False,
                     logger=None,
                     timestamp=None):
-    if validate:
-        raise NotImplementedError('Built-in validation is not implemented '
-                                  'yet in not-distributed training. Use '
-                                  'distributed training or test.py and '
-                                  '*eval.py scripts instead.')
     # prepare data loaders
     dataset = dataset if isinstance(dataset, (list, tuple)) else [dataset]
     data_loaders = [
@@ -298,8 +294,7 @@ def _non_dist_train(model,
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
-    runner = Runner(
-        model, batch_processor, optimizer, cfg.work_dir, logger=logger)
+    runner = Runner(model, batch_processor, optimizer, cfg.work_dir, logger=logger)
     # an ugly walkaround to make the .log and .log.json filenames the same
     runner.timestamp = timestamp
     # fp16 setting
@@ -312,8 +307,17 @@ def _non_dist_train(model,
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config)
 
+    if validate:
+        val_dataset_cfg = cfg.data.val
+        eval_cfg = cfg.get('evaluation', {})        
+        dataset_type = DATASETS.get(val_dataset_cfg.type)
+        if issubclass(dataset_type, datasets.CocoDataset):
+            runner.register_hook(CocoLocalEvalmAPHook(val_dataset_cfg, **eval_cfg))
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore") 
+        runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
